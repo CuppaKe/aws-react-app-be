@@ -1,0 +1,68 @@
+openapi: 3.0.1
+info:
+  title: Product Service API
+  description: API for managing products in a catalog. Includes CRUD operations for products.
+  version: 0.0.1
+
+paths:
+  /products:
+    get:
+      summary: Get a list of all products
+      description: Returns a list of all products in the catalog.
+      responses:
+        '200':
+          description: A list of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+        '500':
+          description: Internal server error
+  /products/{productId}:
+    get:
+      summary: Get a product by ID
+      description: Fetches a product by its unique ID.
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema:
+            type: integer
+          description: ID of the product to fetch
+      responses:
+        '200':
+          description: A product object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          description: Product not found
+        '500':
+          description: Internal server error
+
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier of the product
+          example: 1
+        title:
+          type: string
+          description: Name of the product
+          example: 'Wireless Mouse'
+        description:
+          type: string
+          description: Detailed description of the product
+          example: 'A wireless mouse with ergonomic design.'
+        price:
+          type: number
+          format: float
+          description: Price of the product
+          example: 19.99
+
