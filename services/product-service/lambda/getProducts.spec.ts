@@ -1,15 +1,62 @@
+import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { mockClient } from "aws-sdk-client-mock";
+
 import { handler } from "./getProducts";
 
-describe("Get Products Lambda:", () => {
-  it("should return list of products with status 200", async () => {
-    // Act
-    const result = await handler();
+// Create the mock client
+const ddbMock = mockClient(DynamoDBDocumentClient);
 
-    // Assert
-    expect(result.statusCode).toBe(200);
+describe("getProducts handler:", () => {
+  const mockProducts = [
+    { id: "1", title: "Product 1", price: 10 },
+    { id: "2", title: "Product 2", price: 20 },
+  ];
 
-    const body = JSON.parse(result.body as string);
-    expect(Array.isArray(body)).toBeTruthy();
-    expect(body.length).toEqual(3);
+  const mockStocks = [
+    { product_id: "1", count: 5 },
+    { product_id: "2", count: 3 },
+  ];
+
+  beforeEach(() => {
+    ddbMock.reset();
+  });
+
+  it("should return products with stock counts", async () => {
+    ddbMock
+      .on(ScanCommand)
+      .resolvesOnce({ Items: mockProducts }) // First call for products
+      .resolvesOnce({ Items: mockStocks }); // Second call for stocks
+
+    const response = await handler();
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body).toEqual([
+      { ...mockProducts[0], count: 5 },
+      { ...mockProducts[1], count: 3 },
+    ]);
+  });
+
+  it("should handle empty results", async () => {
+    ddbMock
+      .on(ScanCommand)
+      .resolvesOnce({ Items: [] })
+      .resolvesOnce({ Items: [] });
+
+    const response = await handler();
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toEqual([]);
+  });
+
+  it("should handle error cases", async () => {
+    ddbMock.on(ScanCommand).rejects(new Error("DB Error"));
+
+    const response = await handler();
+
+    expect(response.statusCode).toBe(500);
+    expect(JSON.parse(response.body)).toEqual({
+      message: "Internal server error",
+    });
   });
 });
