@@ -81,7 +81,7 @@ export const handler = async (event: APIGatewayProxyEvent) => {
   } catch (error) {
     console.error("Error:", error);
 
-    if (error.name === "TransactionCanceledException") {
+    if ((error as any)?.name === "TransactionCanceledException") {
       return {
         statusCode: 409,
         body: JSON.stringify({

@@ -22,6 +22,12 @@ export const validateProduct = (
   if (typeof data.price !== "number" || data.price <= 0) {
     return { isValid: false, message: "Price must be a positive number" };
   }
+  if (!data.count) {
+    return { isValid: false, message: "Count is required" };
+  }
+  if (typeof data.count !== "number" || data.count < 0) {
+    return { isValid: false, message: "Count must be a positive number" };
+  }
 
   return { isValid: true };
 };
