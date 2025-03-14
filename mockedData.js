@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "crypto";
 
 const items = [
   {
@@ -19,7 +19,7 @@ const items = [
 ];
 
 const ItemDtoMapper = ({ title, description, price }) => ({
-  id: uuidv4(),
+  id: randomUUID(),
   title,
   description,
   price,
