@@ -5,6 +5,7 @@ export interface Product {
   title: string;
   description: string;
   price: number;
+  count: number;
 }
 
 export const validateProduct = (
@@ -19,13 +20,13 @@ export const validateProduct = (
   if (!data.price) {
     return { isValid: false, message: "Price is required" };
   }
-  if (typeof data.price !== "number" || data.price <= 0) {
+  if (typeof Number(data.price) !== "number" || Number(data.price) <= 0) {
     return { isValid: false, message: "Price must be a positive number" };
   }
   if (!data.count) {
     return { isValid: false, message: "Count is required" };
   }
-  if (typeof data.count !== "number" || data.count < 0) {
+  if (typeof Number(data.count) !== "number" || Number(data.count) < 0) {
     return { isValid: false, message: "Count must be a positive number" };
   }
 
@@ -33,8 +34,9 @@ export const validateProduct = (
 };
 
 export const productMapper: (item: any) => Product = (item) => ({
-  id: randomUUID(),
+  id: item?.id ?? randomUUID(),
   title: <string>item.title,
   description: <string>item.description,
-  price: <number>item.price,
+  price: Number(item.price),
+  count: Number(item.count),
 });

@@ -8,14 +8,24 @@ import {
   PayloadFormatVersion,
 } from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import { StringParameter } from "aws-cdk-lib/aws-ssm";
 import * as s3 from "aws-cdk-lib/aws-s3";
-import * as s3n from "aws-cdk-lib/aws-s3-notifications"; // Add this import
+import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as path from "path";
 
 export class UploadServiceStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
+
+    const queueUrl = StringParameter.valueForStringParameter(
+      this,
+      "/product-service/catalog-items-queue-url"
+    );
+    const queueArn = StringParameter.valueForStringParameter(
+      this,
+      "/product-service/catalog-items-queue-arn"
+    );
 
     const uploadBucket = s3.Bucket.fromBucketName(
       this,
@@ -60,6 +70,7 @@ export class UploadServiceStack extends Stack {
         }),
         environment: {
           UPLOAD_BUCKET: uploadBucket.bucketName,
+          SQS_QUEUE_URL: queueUrl,
         },
         timeout: Duration.seconds(60),
         layers: [csvParserLayer],
@@ -82,15 +93,16 @@ export class UploadServiceStack extends Stack {
           "s3:PutObject",
           "s3:DeleteObject",
           "s3:CopyObject",
+          "sqs:SendMessage",
         ],
-        resources: [`${uploadBucket.bucketArn}/*`],
+        resources: [`${uploadBucket.bucketArn}/*`, queueArn],
       })
     );
 
     // Add S3 bucket notification configuration
     uploadBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
-      new s3n.LambdaDestination(importFileParserLambda), // Use s3n.LambdaDestination
+      new s3n.LambdaDestination(importFileParserLambda),
       { prefix: "uploaded/", suffix: ".csv" }
     );
 
@@ -118,7 +130,6 @@ export class UploadServiceStack extends Stack {
       ),
     });
 
-    // Outputs
     new CfnOutput(this, "ApiUrl", {
       value: api.url ?? "Something went wrong with the API URL",
       description: "Import Service API URL",

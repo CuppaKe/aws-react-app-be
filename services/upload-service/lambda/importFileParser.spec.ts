@@ -5,30 +5,33 @@ import {
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { mockClient } from "aws-sdk-client-mock";
-import { S3Event } from "aws-lambda";
+import { S3Event, S3EventRecord } from "aws-lambda";
 import { Readable } from "stream";
 import { sdkStreamMixin } from "@aws-sdk/util-stream-node";
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 
 import { handler } from "./importFileParser";
 
 const s3Mock = mockClient(S3Client);
+const sqsMock = mockClient(SQSClient);
 
 describe("ImportFileParser Lambda Tests", () => {
   beforeEach(() => {
-    jest.resetModules(); // Clears any cached modules
+    jest.resetModules();
     s3Mock.reset();
+    sqsMock.reset();
   });
 
   const mockS3Event: S3Event = {
     Records: [
-      {
+      <S3EventRecord>{
         eventSource: "aws:s3",
         eventTime: new Date().toISOString(),
         s3: {
           bucket: { name: "test-bucket" },
           object: { key: "uploaded/test.csv" },
         },
-      } as any,
+      },
     ],
   };
 
@@ -44,9 +47,11 @@ describe("ImportFileParser Lambda Tests", () => {
       "id,title,description\n1,Test Product,Test Description";
     const mockStream = createMockStream(mockCsvContent);
 
-    s3Mock.on(GetObjectCommand).resolves({ Body: mockStream }); // Mocking the S3 GetObject response
+    s3Mock.on(GetObjectCommand).resolves({ Body: mockStream });
     s3Mock.on(CopyObjectCommand).resolves({});
     s3Mock.on(DeleteObjectCommand).resolves({});
+
+    sqsMock.on(SendMessageCommand).resolves({});
 
     await handler(mockS3Event);
 
