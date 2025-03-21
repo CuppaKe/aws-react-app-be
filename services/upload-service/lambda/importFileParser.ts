@@ -5,10 +5,14 @@ import {
   CopyObjectCommand,
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import * as csv from "csv-parser";
 import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 
-const s3Client = new S3Client({ region: process.env.AWS_REGION });
+const s3Client = new S3Client({});
+const sqsClient = new SQSClient({});
+const SQS_QUEUE_URL = process.env.SQS_QUEUE_URL!;
 
 async function moveFile(bucket: string, sourceKey: string): Promise<void> {
   try {
@@ -41,6 +45,40 @@ async function moveFile(bucket: string, sourceKey: string): Promise<void> {
   }
 }
 
+async function sendMessageToSQS(message: Record<string, any>): Promise<void> {
+  try {
+    console.log("Sending message to SQS:", message);
+
+    const result = await sqsClient.send(
+      new SendMessageCommand({
+        QueueUrl: SQS_QUEUE_URL,
+        MessageBody: JSON.stringify(message),
+      })
+    );
+
+    if (!result.MessageId) {
+      throw new Error("Message not sent to SQS");
+    }
+
+    console.log(`Successfully sent message with ID:`, result.MessageId);
+  } catch (error) {
+    console.error(`Failed to send message:`, error);
+    throw error;
+  }
+}
+
+async function processCSVStream(stream: Readable): Promise<void> {
+  await pipeline(stream, csv(), async function* (source) {
+    for await (const data of source) {
+      try {
+        await sendMessageToSQS(data);
+      } catch (error) {
+        console.error("Error processing CSV row:", error);
+      }
+    }
+  });
+}
+
 export const handler = async (event: S3Event): Promise<void> => {
   try {
     console.log(
@@ -69,23 +107,10 @@ export const handler = async (event: S3Event): Promise<void> => {
       // Create readable stream from S3 object body
       const stream = response.Body as Readable;
 
-      // Process the CSV stream
-      await new Promise((resolve, reject) => {
-        stream
-          .pipe(csv())
-          .on("data", (data) => {
-            // Log each row from CSV
-            console.log("Parsed CSV row:", JSON.stringify(data, null, 2));
-          })
-          .on("error", (error) => {
-            console.error("Error parsing CSV:", error);
-            reject(error);
-          })
-          .on("end", () => {
-            console.log("Finished processing CSV file");
-            resolve(null);
-          });
-      });
+      // Process the CSV stream and get all records
+      await processCSVStream(stream);
+
+      console.log("All records sent to SQS successfully");
 
       // After successful processing, move the file
       await moveFile(bucket, key);
