@@ -16,6 +16,12 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     if (!event.body) {
       return {
         statusCode: 400,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Credentials": true,
+          "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        },
         body: JSON.stringify({
           message: "Product is required",
         }),
@@ -30,6 +36,12 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     } catch (error) {
       return {
         statusCode: 400,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Credentials": true,
+          "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        },
         body: JSON.stringify({
           message: "Invalid JSON in request body",
         }),
@@ -41,6 +53,12 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     if (!isItemBodyValidResult.isValid) {
       return {
         statusCode: 400,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Credentials": true,
+          "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        },
         body: JSON.stringify({ message: isItemBodyValidResult.message }),
       };
     }
@@ -73,6 +91,12 @@ export const handler = async (event: APIGatewayProxyEvent) => {
 
     return {
       statusCode: 201,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+        "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+      },
       body: JSON.stringify({
         id: newProduct.id,
         message: "Product and stock created successfully",
@@ -84,6 +108,12 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     if ((error as any)?.name === "TransactionCanceledException") {
       return {
         statusCode: 409,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Credentials": true,
+          "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        },
         body: JSON.stringify({
           message:
             "Product creation failed due to conflict. Product might already exist.",
@@ -93,6 +123,12 @@ export const handler = async (event: APIGatewayProxyEvent) => {
 
     return {
       statusCode: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+        "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+      },
       body: JSON.stringify({
         message: "Internal server error",
       }),

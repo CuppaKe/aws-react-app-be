@@ -1,13 +1,7 @@
 import { Construct } from "constructs";
-import { Stack, StackProps, CfnOutput, Duration } from "aws-cdk-lib";
+import { Stack, StackProps, CfnOutput, Duration, Fn } from "aws-cdk-lib";
 import { Function, Runtime, Code, LayerVersion } from "aws-cdk-lib/aws-lambda";
-import {
-  HttpApi,
-  CorsHttpMethod,
-  HttpMethod,
-  PayloadFormatVersion,
-} from "aws-cdk-lib/aws-apigatewayv2";
-import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import { StringParameter } from "aws-cdk-lib/aws-ssm";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
@@ -18,6 +12,7 @@ export class UploadServiceStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
+    // Retrieve SQS queue details from SSM
     const queueUrl = StringParameter.valueForStringParameter(
       this,
       "/product-service/catalog-items-queue-url"
@@ -27,19 +22,69 @@ export class UploadServiceStack extends Stack {
       "/product-service/catalog-items-queue-arn"
     );
 
+    // Import existing S3 bucket
     const uploadBucket = s3.Bucket.fromBucketName(
       this,
       "ImportBucket",
       "aws-react-app-import-service"
     );
 
-    // Create Lambda Layer for csv-parser
+    // Create Lambda Layer for CSV Parser
     const csvParserLayer = new LayerVersion(this, "CsvParserLayer", {
       code: Code.fromAsset(path.join(__dirname, "../layers/csv-parser-layer")),
       compatibleRuntimes: [Runtime.NODEJS_20_X],
       description: "Layer containing csv-parser package",
     });
 
+    // Import Lambda Authorizer Function
+    const authorizerFunction = Function.fromFunctionArn(
+      this,
+      "ImportedAuthorizerFunction",
+      Fn.importValue("AuthorizerFunctionArn")
+    );
+
+    // Create REST API Gateway
+    const api = new apigateway.RestApi(this, "import-service-api", {
+      restApiName: "Import Service API",
+      description: "Import Service API using REST API Gateway",
+      deployOptions: {
+        stageName: "prod",
+      },
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ["Authorization", "Content-Type"],
+      },
+    });
+
+    // Add gateway responses
+    api.addGatewayResponse("Unauthorized", {
+      type: apigateway.ResponseType.UNAUTHORIZED,
+      statusCode: "401",
+      responseHeaders: {
+        "Access-Control-Allow-Origin": "'*'",
+        "Access-Control-Allow-Headers": "'Content-Type,Authorization'",
+        "Content-Type": "'application/json'",
+      },
+      templates: {
+        "application/json": '{"message": "Authorization required"}',
+      },
+    });
+
+    api.addGatewayResponse("Forbidden", {
+      type: apigateway.ResponseType.ACCESS_DENIED,
+      statusCode: "403",
+      responseHeaders: {
+        "Access-Control-Allow-Origin": "'*'",
+        "Access-Control-Allow-Headers": "'Content-Type,Authorization'",
+        "Content-Type": "'application/json'",
+      },
+      templates: {
+        "application/json": '{"message": "$context.authorizer.message"}',
+      },
+    });
+
+    // Create Lambda Function for Importing Products
     const importProductsFileLambda = new Function(
       this,
       "ImportProductsFileFunction",
@@ -57,7 +102,7 @@ export class UploadServiceStack extends Stack {
       }
     );
 
-    // Create importFileParser Lambda with the csv-parser layer
+    // Create Import File Parser Lambda with the CSV Parser Layer
     const importFileParserLambda = new Function(
       this,
       "ImportFileParserFunction",
@@ -77,7 +122,7 @@ export class UploadServiceStack extends Stack {
       }
     );
 
-    // Add S3 permissions to importProductsFile Lambda
+    // Add permissions for S3 access to importProductsFile Lambda
     importProductsFileLambda.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["s3:PutObject", "s3:GetObject"],
@@ -85,7 +130,7 @@ export class UploadServiceStack extends Stack {
       })
     );
 
-    // Add S3 permissions to importFileParser Lambda
+    // Add permissions for S3 and SQS access to importFileParser Lambda
     importFileParserLambda.addToRolePolicy(
       new iam.PolicyStatement({
         actions: [
@@ -99,37 +144,35 @@ export class UploadServiceStack extends Stack {
       })
     );
 
-    // Add S3 bucket notification configuration
+    // Configure S3 event notification for file uploads
     uploadBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
       new s3n.LambdaDestination(importFileParserLambda),
       { prefix: "uploaded/", suffix: ".csv" }
     );
 
-    // Create HTTP API
-    const api = new HttpApi(this, "import-service-api", {
-      apiName: "Import Service API",
-      corsPreflight: {
-        allowHeaders: ["*"],
-        allowMethods: [CorsHttpMethod.GET, CorsHttpMethod.OPTIONS],
-        allowOrigins: ["*"],
-        maxAge: Duration.days(1),
-      },
-    });
+    // Create Lambda Token Authorizer for API Gateway
+    const authorizer = new apigateway.TokenAuthorizer(
+      this,
+      "ImportAuthorizer",
+      {
+        handler: authorizerFunction,
+        identitySource: apigateway.IdentitySource.header("Authorization"),
+      }
+    );
 
-    // Add route for importProductsFile
-    api.addRoutes({
-      path: "/import",
-      methods: [HttpMethod.GET],
-      integration: new HttpLambdaIntegration(
-        "ImportProductsFileIntegration",
-        importProductsFileLambda,
-        {
-          payloadFormatVersion: PayloadFormatVersion.VERSION_2_0,
-        }
-      ),
-    });
+    // Create API Gateway resource: `/import`
+    const importResource = api.root.addResource("import");
+    importResource.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(importProductsFileLambda),
+      {
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        authorizer,
+      }
+    );
 
+    // Output API URL
     new CfnOutput(this, "ApiUrl", {
       value: api.url ?? "Something went wrong with the API URL",
       description: "Import Service API URL",
