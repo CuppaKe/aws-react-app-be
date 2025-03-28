@@ -7,12 +7,7 @@ import {
   RemovalPolicy,
 } from "aws-cdk-lib";
 import { Function, Runtime, Code } from "aws-cdk-lib/aws-lambda";
-import {
-  HttpApi,
-  CorsHttpMethod,
-  HttpMethod,
-} from "aws-cdk-lib/aws-apigatewayv2";
-import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import * as path from "path";
@@ -21,6 +16,7 @@ import { StringParameter } from "aws-cdk-lib/aws-ssm";
 
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
+import { Cors } from "aws-cdk-lib/aws-apigateway";
 
 export class ProductServiceStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -79,10 +75,9 @@ export class ProductServiceStack extends Stack {
 
     // Lambda function for getProducts
     const getProductsLambda = new Function(this, "GetProductsFunction", {
-      runtime: Runtime.NODEJS_20_X, // or later
+      runtime: Runtime.NODEJS_20_X,
       handler: "getProducts.handler",
       code: Code.fromAsset(path.join(__dirname, "../lambda"), {
-        // This will force update when code changes
         assetHash: Date.now().toString(),
         exclude: ["**/*.ts", "**/*.d.ts", "**/*.spec.*"],
       }),
@@ -98,7 +93,6 @@ export class ProductServiceStack extends Stack {
       runtime: Runtime.NODEJS_20_X,
       handler: "getProductById.handler",
       code: Code.fromAsset(path.join(__dirname, "../lambda"), {
-        // This will force update when code changes
         assetHash: Date.now().toString(),
         exclude: ["**/*.ts", "**/*.d.ts", "**/*.spec.*"],
       }),
@@ -109,12 +103,11 @@ export class ProductServiceStack extends Stack {
       },
     });
 
-    // Lambda function for getProductById
+    // Lambda function for createProduct
     const createProductLambda = new Function(this, "CreateProductFunction", {
       runtime: Runtime.NODEJS_20_X,
       handler: "createProduct.handler",
       code: Code.fromAsset(path.join(__dirname, "../lambda"), {
-        // This will force update when code changes
         assetHash: Date.now().toString(),
         exclude: ["**/*.ts", "**/*.d.ts", "**/*.spec.*"],
       }),
@@ -132,7 +125,6 @@ export class ProductServiceStack extends Stack {
       runtime: Runtime.NODEJS_20_X,
       handler: "catalogBatchProcess.handler",
       code: Code.fromAsset(path.join(__dirname, "../lambda"), {
-        // This will force update when code changes
         assetHash: Date.now().toString(),
         exclude: ["**/*.ts", "**/*.d.ts", "**/*.spec.*"],
       }),
@@ -168,50 +160,37 @@ export class ProductServiceStack extends Stack {
     stocksTable.grantReadWriteData(createProductLambda);
     stocksTable.grantWriteData(catalogBatchProcess);
 
-    // HTTP API
-    const api = new HttpApi(this, "product-service-api", {
-      apiName: "Product Service API",
-      description: "API for managing products",
-      corsPreflight: {
+    // Create REST API
+    const api = new apigateway.RestApi(this, "product-service-rest-api", {
+      restApiName: "Product Service API",
+      defaultCorsPreflightOptions: {
         allowHeaders: ["*"],
-        allowMethods: [
-          CorsHttpMethod.GET,
-          CorsHttpMethod.POST,
-          CorsHttpMethod.OPTIONS,
-        ],
-        allowOrigins: ["*"],
-        maxAge: Duration.days(1),
-        exposeHeaders: ["*"],
+        allowMethods: ["GET", "POST", "OPTIONS"],
+        allowOrigins: Cors.ALL_ORIGINS,
       },
     });
 
-    // Add routes for HTTP API
-    api.addRoutes({
-      path: "/products",
-      methods: [HttpMethod.GET],
-      integration: new HttpLambdaIntegration(
-        "GetProductsIntegration",
-        getProductsLambda
-      ),
-    });
+    // Add routes for REST API
+    const productsResource = api.root.addResource("products");
+    const productResource = productsResource.addResource("{id}");
 
-    api.addRoutes({
-      path: "/products/{id}",
-      methods: [HttpMethod.GET],
-      integration: new HttpLambdaIntegration(
-        "GetProductsIntegration",
-        getProductByIdLambda
-      ),
-    });
+    // GET /products
+    productsResource.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getProductsLambda)
+    );
 
-    api.addRoutes({
-      path: "/products",
-      methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration(
-        "CreateProductIntegration",
-        createProductLambda
-      ),
-    });
+    // GET /products/{id}
+    productResource.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getProductByIdLambda)
+    );
+
+    // POST /products
+    productsResource.addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(createProductLambda)
+    );
 
     // Output the API URL
     new CfnOutput(this, "ApiUrl", {

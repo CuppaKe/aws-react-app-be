@@ -12,6 +12,11 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     if (!itemId) {
       return {
         statusCode: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Credentials": true,
+        },
         body: JSON.stringify({
           message: "Product Id is required",
         }),
@@ -32,6 +37,11 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     if (!productResult.Item) {
       return {
         statusCode: 404,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Credentials": true,
+        },
         body: JSON.stringify({
           message: "Product not found",
         }),
@@ -54,6 +64,11 @@ export const handler = async (event: APIGatewayProxyEvent) => {
 
     return {
       statusCode: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+      },
       body: JSON.stringify(response),
     };
   } catch (error) {
@@ -61,6 +76,11 @@ export const handler = async (event: APIGatewayProxyEvent) => {
 
     return {
       statusCode: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+      },
       body: JSON.stringify({
         message: "Something went wrong",
       }),

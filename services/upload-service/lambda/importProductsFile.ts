@@ -21,6 +21,7 @@ export const handler = async (
         headers: {
           "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
           "Access-Control-Allow-Credentials": true,
+          "Access-Control-Allow-Headers": "Content-Type,Authorization",
         },
         body: JSON.stringify({
           message:
@@ -47,6 +48,7 @@ export const handler = async (
       headers: {
         "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
         "Access-Control-Allow-Credentials": true,
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
       },
       body: signedUrl, // Return just the URL as a string
     };
@@ -58,6 +60,7 @@ export const handler = async (
       headers: {
         "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
         "Access-Control-Allow-Credentials": true,
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
       },
       body: JSON.stringify({
         message: "Error generating import URL",

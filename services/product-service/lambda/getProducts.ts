@@ -29,6 +29,12 @@ export const handler = async () => {
 
     return {
       statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+        "Access-Control-Allow-Methods": "GET,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+      },
       body: JSON.stringify(productsWithStock),
     };
   } catch (error) {
@@ -36,6 +42,10 @@ export const handler = async () => {
 
     return {
       statusCode: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+      },
       body: JSON.stringify({ message: "Internal server error" }),
     };
   }
